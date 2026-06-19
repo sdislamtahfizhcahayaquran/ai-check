@@ -646,10 +646,10 @@
     <input class="field-input" type="password" id="api-key-input" placeholder="sk-...">
 
     <label class="field-label">Base URL (endpoint)</label>
-    <input class="field-input" type="text" id="base-url-input" placeholder="https://api.olagon.com/v1">
+    <input class="field-input" type="text" id="base-url-input" placeholder="https://gateway.olagon.site/anthropic/v1">
 
     <label class="field-label">Model</label>
-    <input class="field-input" type="text" id="model-input" placeholder="gpt-4o / claude-3-5-sonnet / llama-3.3">
+    <input class="field-input" type="text" id="model-input" placeholder="claude-sonnet-4-6">
 
     <label class="field-label">System Prompt (opsional)</label>
     <input class="field-input" type="text" id="system-input" placeholder="Kamu adalah asisten AI yang membantu dan ramah.">
@@ -987,7 +987,7 @@ async function sendMessage() {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
-        'x-api-key': config.apiKey,
+        'Authorization': `Bearer ${config.apiKey}`,
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify(payload),
