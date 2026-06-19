@@ -986,8 +986,7 @@ async function sendMessage() {
     const res = await fetch(`${config.baseUrl}/messages`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${config.apiKey}`,
+        'content-type': 'application/json',
         'x-api-key': config.apiKey,
         'anthropic-version': '2023-06-01',
       },
@@ -1040,7 +1039,7 @@ async function sendMessage() {
     typingRow.remove();
     if (err.name !== 'AbortError') {
       const errBubble = renderMessage('assistant', '');
-      errBubble.innerHTML = `<p style="color:#dc2626;">⚠️ Error: ${err.message}</p><p style="font-size:13px;color:var(--text-secondary);">Pastikan API key dan model sudah benar. Base URL Olagon: <code>https://gateway.olagon.site/anthropic/v1</code></p>`;
+      errBubble.innerHTML = `<p style="color:#dc2626;">⚠️ Error: ${err.message}</p><p style="font-size:13px;color:var(--text-secondary);">Cek konfigurasi: Base URL → <code>https://gateway.olagon.site/anthropic/v1</code>, Model → <code>claude-sonnet-4-6</code></p>`;
     }
   } finally {
     isStreaming = false;
