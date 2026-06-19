@@ -974,29 +974,22 @@ async function sendMessage() {
     const messages = conv.messages.filter(m => m.role !== 'system').slice(-20);
     const systemMsg = conv.messages.find(m => m.role === 'system');
 
-    const body = {
-      model: config.model,
-      messages: messages,
-      stream: true,
-      max_tokens: 4096,
-    };
-    if (systemMsg) body.system = systemMsg.content; // Anthropic style
-    // Try both styles
+    // Anthropic-compatible format (Olagon: gateway.olagon.site/anthropic/v1/messages)
     const payload = {
       model: config.model,
-      messages: systemMsg
-        ? [{ role: 'system', content: systemMsg.content }, ...messages]
-        : messages,
-      stream: true,
       max_tokens: 4096,
+      stream: true,
+      messages: messages,
     };
+    if (systemMsg) payload.system = systemMsg.content;
 
-    const res = await fetch(`${config.baseUrl}/chat/completions`, {
+    const res = await fetch(`${config.baseUrl}/messages`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${config.apiKey}`,
         'x-api-key': config.apiKey,
+        'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify(payload),
       signal: abortController.signal,
@@ -1030,12 +1023,12 @@ async function sendMessage() {
       for (const line of lines) {
         if (!line.startsWith('data: ')) continue;
         const data = line.slice(6).trim();
-        if (data === '[DONE]') continue;
+        if (!data || data === '[DONE]') continue;
         try {
           const json = JSON.parse(data);
-          const delta = json.choices?.[0]?.delta?.content || '';
-          if (delta) {
-            aiText += delta;
+          // Anthropic streaming events
+          if (json.type === 'content_block_delta' && json.delta?.type === 'text_delta') {
+            aiText += json.delta.text || '';
             textNode.innerHTML = markdownToHtml(aiText);
             scrollToBottom();
           }
@@ -1047,11 +1040,7 @@ async function sendMessage() {
     typingRow.remove();
     if (err.name !== 'AbortError') {
       const errBubble = renderMessage('assistant', '');
-      errBubble.innerHTML = `<p style="color:var(--text-danger,#dc2626);">⚠️ Error: ${err.message}</p><p style="font-size:13px;color:var(--text-secondary);">Pastikan API key, base URL, dan model sudah benar. Cek juga apakah endpoint mendukung format OpenAI-compatible.</p>`;
-    } else {
-      if (aiText) {
-        // Keep what was streamed
-      }
+      errBubble.innerHTML = `<p style="color:#dc2626;">⚠️ Error: ${err.message}</p><p style="font-size:13px;color:var(--text-secondary);">Pastikan API key dan model sudah benar. Base URL Olagon: <code>https://gateway.olagon.site/anthropic/v1</code></p>`;
     }
   } finally {
     isStreaming = false;
