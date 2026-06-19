@@ -519,6 +519,40 @@
   }
   .btn-primary:hover { opacity: 0.85; }
 
+
+  /* ── FILE PREVIEW ── */
+  #file-preview-area {
+    display: none; padding: 8px 12px 0;
+    flex-wrap: wrap; gap: 8px;
+  }
+  #file-preview-area.has-files { display: flex; }
+  .file-chip {
+    display: flex; align-items: center; gap: 6px;
+    padding: 5px 8px 5px 10px;
+    background: var(--bg-secondary); border: 1px solid var(--border);
+    border-radius: 20px; font-size: 12px; color: var(--text-secondary);
+    max-width: 200px;
+  }
+  .file-chip img {
+    width: 28px; height: 28px; border-radius: 6px; object-fit: cover; flex-shrink: 0;
+  }
+  .file-chip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+  .file-chip-remove {
+    width: 18px; height: 18px; border-radius: 50%; border: none;
+    background: var(--bg-hover); color: var(--text-muted); cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; flex-shrink: 0; line-height: 1;
+    transition: background 0.1s, color 0.1s;
+  }
+  .file-chip-remove:hover { background: #fee2e2; color: #dc2626; }
+  .user-bubble-files { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+  .user-bubble-img { max-width: 240px; max-height: 180px; border-radius: 10px; object-fit: cover; display: block; }
+  .user-bubble-file {
+    display: flex; align-items: center; gap: 6px; padding: 6px 10px;
+    background: rgba(255,255,255,0.15); border-radius: 8px;
+    font-size: 12px; color: inherit;
+  }
+
   /* Mobile */
   @media (max-width: 640px) {
     #sidebar { position: fixed; left: 0; top: 0; bottom: 0; transform: translateX(-100%); }
@@ -614,10 +648,12 @@
 
   <div id="input-area">
     <div class="input-container">
+      <input type="file" id="file-input" accept="image/*,.pdf,.txt,.csv,.json,.js,.py,.html,.css,.md,.xml" multiple style="display:none">
+      <div id="file-preview-area"></div>
       <textarea id="message-input" placeholder="Ketik pesan..." rows="1" maxlength="32000"></textarea>
       <div class="input-toolbar">
         <div class="input-tools">
-          <button class="tool-btn" title="Lampirkan file" onclick="alert('Fitur upload file memerlukan backend server.')">
+          <button class="tool-btn" title="Lampirkan file" onclick="document.getElementById('file-input').click()">
             <svg viewBox="0 0 24 24"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
           </button>
           <button class="tool-btn" title="Cari di web" onclick="alert('Fitur web search perlu dikonfigurasi terpisah.')">
@@ -668,6 +704,7 @@ let conversations = [];
 let activeConvId = null;
 let isStreaming = false;
 let abortController = null;
+let attachedFiles = []; // [{name, type, base64, mediaType, preview?}]
 
 // ── LOAD ──
 (function init() {
@@ -805,6 +842,79 @@ input.addEventListener('keydown', e => {
   }
 });
 
+
+// ── FILE HANDLING ──
+const fileInput = document.getElementById('file-input');
+const filePreviewArea = document.getElementById('file-preview-area');
+
+fileInput.addEventListener('change', async () => {
+  const files = Array.from(fileInput.files);
+  for (const file of files) {
+    if (attachedFiles.length >= 5) { alert('Maksimal 5 file sekaligus.'); break; }
+    const base64 = await readFileAsBase64(file);
+    const isImage = file.type.startsWith('image/');
+    const isPDF = file.type === 'application/pdf';
+    const obj = { name: file.name, type: isImage ? 'image' : isPDF ? 'pdf' : 'text', base64, mediaType: file.type };
+    if (isImage) obj.preview = URL.createObjectURL(file);
+    attachedFiles.push(obj);
+  }
+  fileInput.value = '';
+  renderFilePreviews();
+  sendBtn.disabled = false;
+});
+
+function readFileAsBase64(file) {
+  return new Promise((res, rej) => {
+    if (file.type.startsWith('image/') || file.type === 'application/pdf') {
+      const r = new FileReader();
+      r.onload = () => res(r.result.split(',')[1]);
+      r.onerror = rej;
+      r.readAsDataURL(file);
+    } else {
+      const r = new FileReader();
+      r.onload = () => res(btoa(unescape(encodeURIComponent(r.result))));
+      r.onerror = rej;
+      r.readAsText(file);
+    }
+  });
+}
+
+function renderFilePreviews() {
+  filePreviewArea.innerHTML = '';
+  filePreviewArea.className = attachedFiles.length ? 'has-files' : '';
+  attachedFiles.forEach((f, i) => {
+    const chip = document.createElement('div');
+    chip.className = 'file-chip';
+    if (f.preview) {
+      chip.innerHTML = `<img src="${f.preview}" alt="${escapeHtml(f.name)}">`;
+    } else {
+      const icon = f.type === 'pdf' ? '📄' : '📝';
+      chip.innerHTML = `<span>${icon}</span>`;
+    }
+    chip.innerHTML += `<span class="file-chip-name">${escapeHtml(f.name)}</span>
+      <button class="file-chip-remove" onclick="removeFile(${i})" title="Hapus">✕</button>`;
+    filePreviewArea.appendChild(chip);
+  });
+}
+
+function removeFile(i) {
+  if (attachedFiles[i].preview) URL.revokeObjectURL(attachedFiles[i].preview);
+  attachedFiles.splice(i, 1);
+  renderFilePreviews();
+  if (!input.value.trim() && attachedFiles.length === 0) sendBtn.disabled = true;
+}
+
+// Drag & drop support
+const inputContainer = document.querySelector('.input-container');
+inputContainer.addEventListener('dragover', e => { e.preventDefault(); inputContainer.style.borderColor = 'var(--accent)'; });
+inputContainer.addEventListener('dragleave', () => { inputContainer.style.borderColor = ''; });
+inputContainer.addEventListener('drop', e => {
+  e.preventDefault();
+  inputContainer.style.borderColor = '';
+  fileInput.files = e.dataTransfer.files;
+  fileInput.dispatchEvent(new Event('change'));
+});
+
 sendBtn.onclick = sendMessage;
 
 // ── STARTER CARDS ──
@@ -817,7 +927,7 @@ function useStarter(el) {
 }
 
 // ── RENDER MESSAGE ──
-function renderMessage(role, content) {
+function renderMessage(role, content, files) {
   const welcome = document.getElementById('welcome');
   if (welcome) welcome.remove();
 
@@ -837,7 +947,25 @@ function renderMessage(role, content) {
   bubble.className = 'bubble ' + (role === 'user' ? 'user' : 'ai');
 
   if (role === 'user') {
-    bubble.textContent = content;
+    if (files && files.length > 0) {
+      const filesDiv = document.createElement('div');
+      filesDiv.className = 'user-bubble-files';
+      files.forEach(f => {
+        if (f.type === 'image' && f.preview) {
+          const img = document.createElement('img');
+          img.src = f.preview; img.className = 'user-bubble-img'; img.alt = f.name;
+          filesDiv.appendChild(img);
+        } else {
+          const icon = f.type === 'pdf' ? '📄' : '📝';
+          filesDiv.innerHTML += `<div class="user-bubble-file">${icon} <span>${escapeHtml(f.name)}</span></div>`;
+        }
+      });
+      bubble.appendChild(filesDiv);
+    }
+    if (content) {
+      const textNode = document.createTextNode(content);
+      bubble.appendChild(textNode);
+    }
   } else {
     bubble.innerHTML = markdownToHtml(content);
     const actions = document.createElement('div');
@@ -927,7 +1055,8 @@ async function sendMessage() {
   sendBtn.disabled = true;
 
   // Render user message
-  renderMessage('user', text);
+  const sentFiles = [...attachedFiles];
+  renderMessage('user', text, sentFiles);
   scrollToBottom();
 
   // Init conversation
@@ -942,7 +1071,33 @@ async function sendMessage() {
   if (conv.messages.length === 0 && config.system) {
     conv.messages.push({ role: 'system', content: config.system });
   }
-  conv.messages.push({ role: 'user', content: text });
+  // Build content array for Anthropic API (multipart if files)
+  let userContent;
+  if (sentFiles.length > 0) {
+    userContent = [];
+    sentFiles.forEach(f => {
+      if (f.type === 'image') {
+        userContent.push({ type: 'image', source: { type: 'base64', media_type: f.mediaType, data: f.base64 } });
+      } else if (f.type === 'pdf') {
+        userContent.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: f.base64 } });
+      } else {
+        // Text file — decode and inline as text block
+        try {
+          const decoded = decodeURIComponent(escape(atob(f.base64)));
+          userContent.push({ type: 'text', text: `[File: ${f.name}]\n\`\`\`\n${decoded}\n\`\`\`` });
+        } catch(e) {
+          userContent.push({ type: 'text', text: `[File: ${f.name}] (tidak bisa dibaca)` });
+        }
+      }
+    });
+    if (text) userContent.push({ type: 'text', text });
+  } else {
+    userContent = text;
+  }
+  conv.messages.push({ role: 'user', content: userContent });
+  // Clear attached files after send
+  attachedFiles = [];
+  renderFilePreviews();
   saveConversations();
   renderConvList();
 
@@ -1050,7 +1205,80 @@ async function sendMessage() {
     }
     // Restore send btn
     sendBtn.innerHTML = `<svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>`;
-    sendBtn.onclick = sendMessage;
+    
+// ── FILE HANDLING ──
+const fileInput = document.getElementById('file-input');
+const filePreviewArea = document.getElementById('file-preview-area');
+
+fileInput.addEventListener('change', async () => {
+  const files = Array.from(fileInput.files);
+  for (const file of files) {
+    if (attachedFiles.length >= 5) { alert('Maksimal 5 file sekaligus.'); break; }
+    const base64 = await readFileAsBase64(file);
+    const isImage = file.type.startsWith('image/');
+    const isPDF = file.type === 'application/pdf';
+    const obj = { name: file.name, type: isImage ? 'image' : isPDF ? 'pdf' : 'text', base64, mediaType: file.type };
+    if (isImage) obj.preview = URL.createObjectURL(file);
+    attachedFiles.push(obj);
+  }
+  fileInput.value = '';
+  renderFilePreviews();
+  sendBtn.disabled = false;
+});
+
+function readFileAsBase64(file) {
+  return new Promise((res, rej) => {
+    if (file.type.startsWith('image/') || file.type === 'application/pdf') {
+      const r = new FileReader();
+      r.onload = () => res(r.result.split(',')[1]);
+      r.onerror = rej;
+      r.readAsDataURL(file);
+    } else {
+      const r = new FileReader();
+      r.onload = () => res(btoa(unescape(encodeURIComponent(r.result))));
+      r.onerror = rej;
+      r.readAsText(file);
+    }
+  });
+}
+
+function renderFilePreviews() {
+  filePreviewArea.innerHTML = '';
+  filePreviewArea.className = attachedFiles.length ? 'has-files' : '';
+  attachedFiles.forEach((f, i) => {
+    const chip = document.createElement('div');
+    chip.className = 'file-chip';
+    if (f.preview) {
+      chip.innerHTML = `<img src="${f.preview}" alt="${escapeHtml(f.name)}">`;
+    } else {
+      const icon = f.type === 'pdf' ? '📄' : '📝';
+      chip.innerHTML = `<span>${icon}</span>`;
+    }
+    chip.innerHTML += `<span class="file-chip-name">${escapeHtml(f.name)}</span>
+      <button class="file-chip-remove" onclick="removeFile(${i})" title="Hapus">✕</button>`;
+    filePreviewArea.appendChild(chip);
+  });
+}
+
+function removeFile(i) {
+  if (attachedFiles[i].preview) URL.revokeObjectURL(attachedFiles[i].preview);
+  attachedFiles.splice(i, 1);
+  renderFilePreviews();
+  if (!input.value.trim() && attachedFiles.length === 0) sendBtn.disabled = true;
+}
+
+// Drag & drop support
+const inputContainer = document.querySelector('.input-container');
+inputContainer.addEventListener('dragover', e => { e.preventDefault(); inputContainer.style.borderColor = 'var(--accent)'; });
+inputContainer.addEventListener('dragleave', () => { inputContainer.style.borderColor = ''; });
+inputContainer.addEventListener('drop', e => {
+  e.preventDefault();
+  inputContainer.style.borderColor = '';
+  fileInput.files = e.dataTransfer.files;
+  fileInput.dispatchEvent(new Event('change'));
+});
+
+sendBtn.onclick = sendMessage;
     sendBtn.title = 'Kirim pesan';
     sendBtn.disabled = input.value.trim().length === 0;
     scrollToBottom();
