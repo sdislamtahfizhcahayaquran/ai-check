@@ -831,7 +831,7 @@ input.addEventListener('input', () => {
   input.style.height = 'auto';
   input.style.height = Math.min(input.scrollHeight, 200) + 'px';
   const len = input.value.length;
-  sendBtn.disabled = len === 0 || isStreaming;
+  updateSendBtn();
   charCount.textContent = len > 500 ? `${len.toLocaleString()}` : '';
 });
 
@@ -860,7 +860,7 @@ fileInput.addEventListener('change', async () => {
   }
   fileInput.value = '';
   renderFilePreviews();
-  sendBtn.disabled = false;
+  updateSendBtn();
 });
 
 function readFileAsBase64(file) {
@@ -897,11 +897,15 @@ function renderFilePreviews() {
   });
 }
 
-function removeFile(i) {
-  if (attachedFiles[i].preview) URL.revokeObjectURL(attachedFiles[i].preview);
-  attachedFiles.splice(i, 1);
+function updateSendBtn() {
+  sendBtn.disabled = (input.value.trim().length === 0 && attachedFiles.length === 0) || isStreaming;
+}
+
+function removeFile(idx) {
+  if (attachedFiles[idx] && attachedFiles[idx].preview) URL.revokeObjectURL(attachedFiles[idx].preview);
+  attachedFiles.splice(idx, 1);
   renderFilePreviews();
-  if (!input.value.trim() && attachedFiles.length === 0) sendBtn.disabled = true;
+  updateSendBtn();
 }
 
 // Drag & drop support
@@ -1041,7 +1045,7 @@ function scrollToBottom() {
 // ── SEND MESSAGE ──
 async function sendMessage() {
   const text = input.value.trim();
-  if (!text || isStreaming) return;
+  if ((!text && attachedFiles.length === 0) || isStreaming) return;
 
   if (!config.apiKey || !config.baseUrl || !config.model) {
     openModal();
@@ -1052,7 +1056,7 @@ async function sendMessage() {
   input.value = '';
   input.style.height = 'auto';
   charCount.textContent = '';
-  sendBtn.disabled = true;
+  updateSendBtn();
 
   // Render user message
   const sentFiles = [...attachedFiles];
@@ -1062,7 +1066,7 @@ async function sendMessage() {
   // Init conversation
   if (!activeConvId) {
     activeConvId = Date.now().toString();
-    const title = text.length > 40 ? text.slice(0, 40) + '…' : text;
+    const title = text ? (text.length > 40 ? text.slice(0, 40) + '…' : text) : (attachedFiles[0] ? attachedFiles[0].name : 'Chat baru');
     conversations.push({ id: activeConvId, title, messages: [] });
   }
   const conv = conversations.find(c => c.id === activeConvId);
@@ -1119,7 +1123,7 @@ async function sendMessage() {
 
   // Change send to stop
   sendBtn.innerHTML = `<svg viewBox="0 0 24 24" style="width:12px;height:12px;fill:currentColor;stroke:none"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>`;
-  sendBtn.disabled = false;
+  sendBtn.disabled = false; // enable stop
   sendBtn.onclick = () => { abortController.abort(); };
   sendBtn.title = 'Stop';
 
@@ -1223,7 +1227,7 @@ fileInput.addEventListener('change', async () => {
   }
   fileInput.value = '';
   renderFilePreviews();
-  sendBtn.disabled = false;
+  updateSendBtn();
 });
 
 function readFileAsBase64(file) {
@@ -1260,11 +1264,15 @@ function renderFilePreviews() {
   });
 }
 
-function removeFile(i) {
-  if (attachedFiles[i].preview) URL.revokeObjectURL(attachedFiles[i].preview);
-  attachedFiles.splice(i, 1);
+function updateSendBtn() {
+  sendBtn.disabled = (input.value.trim().length === 0 && attachedFiles.length === 0) || isStreaming;
+}
+
+function removeFile(idx) {
+  if (attachedFiles[idx] && attachedFiles[idx].preview) URL.revokeObjectURL(attachedFiles[idx].preview);
+  attachedFiles.splice(idx, 1);
   renderFilePreviews();
-  if (!input.value.trim() && attachedFiles.length === 0) sendBtn.disabled = true;
+  updateSendBtn();
 }
 
 // Drag & drop support
@@ -1280,7 +1288,7 @@ inputContainer.addEventListener('drop', e => {
 
 sendBtn.onclick = sendMessage;
     sendBtn.title = 'Kirim pesan';
-    sendBtn.disabled = input.value.trim().length === 0;
+    updateSendBtn();
     scrollToBottom();
   }
 }
